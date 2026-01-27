@@ -11,10 +11,10 @@ class AttackChain(BaseAttackChain):
     """Exploits IAM self-service policy misconfiguration to escalate privileges."""
 
     def run(self) -> AttackResult:
-        access_key = self.require_output("access_key_id")
-        secret_key = self.require_output("secret_access_key")
+        access_key = self.require_output("developer_access_key_id")
+        secret_key = self.require_output("developer_secret_access_key")
         region = self.get_output("aws_region", "us-east-1")
-        bucket_name = self.require_output("protected_bucket")
+        bucket_name = self.require_output("protected_bucket_name")
 
         session = boto3.Session(
             aws_access_key_id=access_key,
