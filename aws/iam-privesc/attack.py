@@ -75,22 +75,19 @@ class AttackChain(BaseAttackChain):
 
         # Step 5: Access protected bucket
         self.log(f"Accessing protected bucket: {bucket_name}")
-        try:
-            response = s3.list_objects_v2(Bucket=bucket_name, MaxKeys=5)
-            objects = [obj["Key"] for obj in response.get("Contents", [])]
-            self.log(f"Found objects: {objects}")
-
-            if objects:
-                obj = s3.get_object(Bucket=bucket_name, Key=objects[0])
-                content = obj["Body"].read().decode("utf-8")[:200]
-                self.log(f"Sample content: {content}...")
-
-        except Exception as e:
-            return AttackResult(
-                success=False,
-                message=f"Failed to access bucket: {e}",
-                log=self._log,
-            )
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                response = s3.list_objects_v2(Bucket=bucket_name, MaxKeys=5)
+                objects = [obj["Key"] for obj in response.get("Contents", [])]
+                self.log(f"Found objects: {objects}")
+                break
+            except s3.exceptions.ClientError as e:
+                if "AccessDenied" in str(e) and attempt < max_attempts - 1:
+                    self.debug(f"Attempt {attempt + 1} failed, waiting for propagation...")
+                    time.sleep(5)
+                else:
+                    raise
 
         # Step 6: Cleanup
         self.log("Cleaning up escalation policy...")
