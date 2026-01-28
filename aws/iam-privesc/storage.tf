@@ -1,21 +1,3 @@
-data "aws_caller_identity" "current" {}
-data "aws_partition" "current" {}
-
-resource "random_string" "suffix" {
-  length  = 8
-  special = false
-  upper   = false
-}
-
-locals {
-  common_tags = {
-    Environment  = "lab"
-    Destroyable  = "true"
-    Scenario     = "iam-privilege-escalation"
-    AutoShutdown = "24hours"
-  }
-}
-
 resource "aws_s3_bucket" "protected_data" {
   bucket        = "${var.lab_prefix}-protected-${random_string.suffix.result}"
   force_destroy = true
@@ -94,49 +76,4 @@ Application Tier:
 Note: All production credentials stored in this S3 bucket.
 Admin access required for retrieval.
 EOT
-}
-
-resource "aws_ssm_parameter" "protected_bucket_name" {
-  name  = "/${var.lab_prefix}/config/protected_bucket"
-  type  = "String"
-  value = aws_s3_bucket.protected_data.id
-
-  tags = merge(local.common_tags, {
-    Purpose = "S3 bucket name for protected data storage"
-  })
-}
-
-resource "aws_ssm_parameter" "admin_role_arn" {
-  name  = "/${var.lab_prefix}/config/admin_automation_role"
-  type  = "String"
-  value = aws_iam_role.admin_automation.arn
-
-  tags = merge(local.common_tags, {
-    Purpose = "Role ARN for administrative automation scripts"
-  })
-}
-
-resource "aws_ssm_parameter" "security_note" {
-  name  = "/${var.lab_prefix}/notes/security-review"
-  type  = "String"
-  value = "TODO: Review IAM policies for developers. Self-service policy may be too broad."
-
-  tags = merge(local.common_tags, {
-    Purpose = "Security team notes"
-  })
-}
-
-module "audit_logging" {
-  count  = var.enable_audit_logging ? 1 : 0
-  source = "../modules/audit-logging"
-  
-  name_prefix = var.lab_prefix
-  suffix      = random_string.suffix.result
-  
-  data_resources = [{
-    type   = "AWS::S3::Object"
-    values = ["${aws_s3_bucket.protected_data.arn}/*"]
-  }]
-  
-  tags = local.common_tags
 }

@@ -11,8 +11,10 @@ Exploit IAM policy misconfiguration to escalate privileges and access protected 
 ## MITRE ATT&CK
 
 - T1078.004 - Valid Accounts: Cloud Accounts
+- T1069.003 - Permission Groups Discovery: Cloud Groups 
 - T1098.001 - Account Manipulation: Additional Cloud Credentials
-- T1530 - Data from Cloud Storage Object
+- T1619 - Cloud Storage Object Discovery 
+- T1530 - Data from Cloud Storage
 
 ## Architecture
 

@@ -1,9 +1,9 @@
 terraform {
   required_version = ">= 1.0"
-  
+
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
+    google = {
+      source  = "hashicorp/google"
       version = "~> 6.0"
     }
     random = {
@@ -11,6 +11,6 @@ terraform {
       version = "~> 3.5"
     }
   }
-  
+
   backend "local" {}
 }

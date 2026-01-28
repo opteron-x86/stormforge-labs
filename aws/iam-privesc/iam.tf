@@ -14,7 +14,7 @@ resource "aws_iam_access_key" "developer" {
 }
 
 resource "aws_iam_user_policy" "developer_base" {
-  name = "${var.lab_prefix}-developer-base-permissions"
+  name = "${var.lab_prefix}-developer-base-policy"
   user = aws_iam_user.developer.name
 
   policy = jsonencode({
@@ -66,7 +66,7 @@ resource "aws_iam_user_policy" "developer_base" {
 }
 
 resource "aws_iam_user_policy" "developer_self_manage" {
-  name = "${var.lab_prefix}-developer-self-service"
+  name = "${var.lab_prefix}-developer-self-service-policy"
   user = aws_iam_user.developer.name
 
   policy = jsonencode({
