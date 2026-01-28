@@ -38,8 +38,12 @@ resource "google_project_iam_member" "developer_browser" {
   member  = "serviceAccount:${google_service_account.developer.email}"
 }
 
-# VULNERABILITY: This grants the developer SA the ability to create keys for ANY service account
-# in the project, not just their own. The intent was self-service key management.
+resource "google_project_iam_member" "developer_secret_viewer" {
+  project = var.gcp_project
+  role    = "roles/secretmanager.viewer"
+  member  = "serviceAccount:${google_service_account.developer.email}"
+}
+
 resource "google_project_iam_member" "developer_key_admin" {
   project = var.gcp_project
   role    = "roles/iam.serviceAccountKeyAdmin"
