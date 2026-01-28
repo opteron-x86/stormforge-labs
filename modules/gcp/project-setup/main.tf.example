@@ -1,0 +1,111 @@
+# GCP Service Account Key Privilege Escalation
+# 
+# Uses the project-setup module to ensure APIs are enabled before
+# creating lab resources.
+
+module "project_setup" {
+  source = "../../modules/gcp/project-setup"
+
+  project_id      = var.gcp_project
+  enable_api_sets = ["storage", "secrets"]
+}
+
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# Developer service account - initial foothold
+resource "google_service_account" "developer" {
+  depends_on = [module.project_setup.ready]
+
+  account_id   = "${var.lab_prefix}-developer-${random_string.suffix.result}"
+  display_name = "Developer Service Account"
+  description  = "Junior developer with limited permissions"
+}
+
+# Admin service account - escalation target
+resource "google_service_account" "admin" {
+  depends_on = [module.project_setup.ready]
+
+  account_id   = "${var.lab_prefix}-admin-${random_string.suffix.result}"
+  display_name = "Admin Service Account"
+  description  = "Admin automation account with storage access"
+}
+
+# Developer can view storage but not access protected bucket
+resource "google_project_iam_member" "developer_storage_viewer" {
+  project = var.gcp_project
+  role    = "roles/storage.objectViewer"
+  member  = "serviceAccount:${google_service_account.developer.email}"
+}
+
+# VULNERABILITY: Developer can create keys for ANY service account
+# This should be restricted to their own SA
+resource "google_project_iam_member" "developer_key_creator" {
+  project = var.gcp_project
+  role    = "roles/iam.serviceAccountKeyAdmin"
+  member  = "serviceAccount:${google_service_account.developer.email}"
+}
+
+# Admin has full storage access
+resource "google_project_iam_member" "admin_storage_admin" {
+  project = var.gcp_project
+  role    = "roles/storage.objectAdmin"
+  member  = "serviceAccount:${google_service_account.admin.email}"
+}
+
+# Protected bucket with sensitive data
+resource "google_storage_bucket" "protected_data" {
+  depends_on = [module.project_setup.ready]
+
+  name                        = "${var.lab_prefix}-protected-${random_string.suffix.result}"
+  location                    = var.gcp_region
+  force_destroy               = true
+  uniform_bucket_level_access = true
+
+  labels = var.default_labels
+}
+
+# Flag file in protected bucket
+resource "google_storage_bucket_object" "flag" {
+  name    = "financial-records/flag.txt"
+  bucket  = google_storage_bucket.protected_data.name
+  content = "FLAG{gcp_sa_key_privesc_${random_string.suffix.result}}"
+}
+
+resource "google_storage_bucket_object" "decoy" {
+  name    = "financial-records/q4-projections.csv"
+  bucket  = google_storage_bucket.protected_data.name
+  content = "quarter,revenue,expenses\nQ4-2025,1200000,890000"
+}
+
+# Create key for developer (initial access)
+resource "google_service_account_key" "developer" {
+  service_account_id = google_service_account.developer.name
+}
+
+# Secret with hint about admin account
+resource "google_secret_manager_secret" "protected_bucket_name" {
+  depends_on = [module.project_setup.ready]
+
+  secret_id = "${var.lab_prefix}-bucket-config-${random_string.suffix.result}"
+
+  replication {
+    auto {}
+  }
+
+  labels = var.default_labels
+}
+
+resource "google_secret_manager_secret_version" "protected_bucket_name" {
+  secret      = google_secret_manager_secret.protected_bucket_name.id
+  secret_data = google_storage_bucket.protected_data.name
+}
+
+resource "google_secret_manager_secret_iam_member" "developer_accessor" {
+  secret_id = google_secret_manager_secret.protected_bucket_name.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.developer.email}"
+}

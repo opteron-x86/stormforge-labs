@@ -15,6 +15,21 @@ locals {
 
 data "google_project" "current" {}
 
+module "project_setup" {
+  source = "../../../modules/gcp/project-setup"
+
+  project_id      = var.gcp_project
+  enable_api_sets = ["iam", "storage", "secrets"]
+}
+
+resource "google_service_account" "attacker" {
+  depends_on = [module.project_setup.ready]
+
+  account_id   = "${var.lab_prefix}-attacker-${random_string.suffix.result}"
+  display_name = "Attacker Service Account"
+}
+
+
 resource "google_storage_bucket" "protected_data" {
   name          = "${var.lab_prefix}-protected-${random_string.suffix.result}"
   location      = var.gcp_region

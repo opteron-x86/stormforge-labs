@@ -2,7 +2,7 @@ data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
 module "ami" {
-  source = "../modules/ami-lookup"
+  source = "../../../modules/aws/ami-lookup"
 }
 
 resource "random_string" "suffix" {
@@ -22,7 +22,7 @@ locals {
 }
 
 module "vpc" {
-  source = "../modules/lab-vpc"
+  source = "../../../modules/aws/lab-vpc"
 
   name_prefix       = var.lab_prefix
   vpc_cidr          = "10.0.0.0/16"

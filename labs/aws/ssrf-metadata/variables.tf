@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region for lab deployment"
   type        = string
-  default     = ""
+  default     = "us-east-1"
 }
 
 variable "allowed_source_ips" {
