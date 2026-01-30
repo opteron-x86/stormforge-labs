@@ -6,12 +6,12 @@ dnf install -y python3 python3-pip postgresql16 awscli
 
 pip3 install flask requests psycopg2-binary boto3
 
-useradd -m -s /bin/bash sentinel
-mkdir -p /opt/sentinel
-chown sentinel:sentinel /opt/sentinel
+useradd -m -s /bin/bash chainpulse
+mkdir -p /opt/chainpulse
+chown chainpulse:chainpulse /opt/chainpulse
 
 # Download application files from S3
-aws s3 cp s3://${bucket_name}/app/app.py /opt/sentinel/app.py
+aws s3 cp s3://${bucket_name}/app/app.py /opt/chainpulse/app.py
 aws s3 cp s3://${bucket_name}/app/seed.sql /tmp/seed.sql
 
 # Wait for RDS
@@ -27,20 +27,20 @@ done
 # Populate database
 PGPASSWORD='${db_password}' psql -h ${db_host} -p ${db_port} -U ${db_user} -d ${db_name} -f /tmp/seed.sql
 
-chown -R sentinel:sentinel /opt/sentinel
-touch /var/log/sentinel.log
-chown sentinel:sentinel /var/log/sentinel.log
+chown -R chainpulse:chainpulse /opt/chainpulse
+touch /var/log/chainpulse.log
+chown chainpulse:chainpulse /var/log/chainpulse.log
 
-cat > /etc/systemd/system/sentinel.service << 'SERVICE'
+cat > /etc/systemd/system/chainpulse.service << 'SERVICE'
 [Unit]
-Description=SENTINEL Threat Intelligence Feed Aggregator
+Description=ChainPulse Price Oracle Aggregator
 After=network.target
 
 [Service]
 Type=simple
-User=sentinel
-WorkingDirectory=/opt/sentinel
-ExecStart=/usr/bin/python3 /opt/sentinel/app.py
+User=chainpulse
+WorkingDirectory=/opt/chainpulse
+ExecStart=/usr/bin/python3 /opt/chainpulse/app.py
 Restart=always
 RestartSec=5
 
@@ -49,5 +49,5 @@ WantedBy=multi-user.target
 SERVICE
 
 systemctl daemon-reload
-systemctl enable sentinel
-systemctl start sentinel
+systemctl enable chainpulse
+systemctl start chainpulse

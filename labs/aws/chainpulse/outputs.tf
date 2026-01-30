@@ -1,5 +1,5 @@
 output "webapp_url" {
-  description = "URL of the threat intelligence feed aggregator"
+  description = "URL of the price oracle aggregator"
   value       = "http://${aws_instance.webapp.public_ip}:8080"
 }
 
@@ -20,7 +20,7 @@ output "instance_role_arn" {
 
 output "rds_endpoint" {
   description = "RDS endpoint (internal)"
-  value       = aws_db_instance.intel_db.endpoint
+  value       = aws_db_instance.trading_db.endpoint
   sensitive   = true
 }
 
@@ -31,5 +31,5 @@ output "secret_arn" {
 
 output "attack_hint" {
   description = "Starting point for exploitation"
-  value       = "The feed aggregator fetches external threat intelligence. What URLs can it access?"
+  value       = "The oracle aggregator validates external price feeds. What URLs can it access?"
 }

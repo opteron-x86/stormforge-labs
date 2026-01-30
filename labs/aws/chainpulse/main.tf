@@ -1,4 +1,4 @@
-# Sentinel Feeds - Threat Intelligence Aggregator
+# ChainPulse - Crypto Price Oracle Aggregator
 # Attack Chain: SSRF → IMDSv1 → Secrets Manager → RDS Exfiltration
 # Difficulty: Medium
 # Estimated Time: 60-90 minutes
@@ -26,7 +26,7 @@ locals {
   common_tags = {
     Environment  = "lab"
     Destroyable  = "true"
-    Scenario     = "sentinel-feeds"
+    Scenario     = "chainpulse"
     AutoShutdown = "4hours"
   }
   instance_type = "t3.micro"
@@ -73,7 +73,6 @@ module "vpc" {
   tags = local.common_tags
 }
 
-# RDS Security Group
 resource "aws_security_group" "rds" {
   name        = "${var.lab_prefix}-rds-${random_string.suffix.result}"
   description = "PostgreSQL access from application tier"
@@ -92,7 +91,6 @@ resource "aws_security_group" "rds" {
   })
 }
 
-# DB Subnet Group
 resource "aws_db_subnet_group" "main" {
   name       = "${var.lab_prefix}-db-${random_string.suffix.result}"
   subnet_ids = module.vpc.private_subnet_ids
@@ -102,9 +100,8 @@ resource "aws_db_subnet_group" "main" {
   })
 }
 
-# RDS PostgreSQL Instance
-resource "aws_db_instance" "intel_db" {
-  identifier     = "${var.lab_prefix}-intel-${random_string.suffix.result}"
+resource "aws_db_instance" "trading_db" {
+  identifier     = "${var.lab_prefix}-trading-${random_string.suffix.result}"
   engine         = "postgres"
   engine_version = "16.6"
   instance_class = "db.t3.micro"
@@ -112,8 +109,8 @@ resource "aws_db_instance" "intel_db" {
   allocated_storage = 20
   storage_type      = "gp2"
 
-  db_name  = "inteldb"
-  username = "sentinel_svc"
+  db_name  = "tradingdb"
+  username = "chainpulse_svc"
   password = random_password.db_password.result
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -126,14 +123,12 @@ resource "aws_db_instance" "intel_db" {
   publicly_accessible = false
 
   tags = merge(local.common_tags, {
-    Name               = "${var.lab_prefix}-intel-db"
-    DataClassification = "SECRET"
+    Name = "${var.lab_prefix}-trading-db"
   })
 }
 
-# Secrets Manager - Database Credentials
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name                    = "${var.lab_prefix}/intel-db/credentials-${random_string.suffix.result}"
+  name                    = "${var.lab_prefix}/trading-db/credentials-${random_string.suffix.result}"
   recovery_window_in_days = 0
 
   tags = merge(local.common_tags, {
@@ -144,16 +139,15 @@ resource "aws_secretsmanager_secret" "db_credentials" {
 resource "aws_secretsmanager_secret_version" "db_credentials" {
   secret_id = aws_secretsmanager_secret.db_credentials.id
   secret_string = jsonencode({
-    username = aws_db_instance.intel_db.username
+    username = aws_db_instance.trading_db.username
     password = random_password.db_password.result
-    host     = aws_db_instance.intel_db.address
-    port     = aws_db_instance.intel_db.port
-    dbname   = aws_db_instance.intel_db.db_name
+    host     = aws_db_instance.trading_db.address
+    port     = aws_db_instance.trading_db.port
+    dbname   = aws_db_instance.trading_db.db_name
     engine   = "postgres"
   })
 }
 
-# S3 Bucket for application files
 resource "aws_s3_bucket" "app_files" {
   bucket        = "${var.lab_prefix}-app-${random_string.suffix.result}"
   force_destroy = true
@@ -186,7 +180,6 @@ resource "aws_s3_object" "seed_sql" {
   etag   = filemd5("${path.module}/files/seed.sql")
 }
 
-# IAM Role for EC2
 resource "aws_iam_role" "webapp" {
   name = "${var.lab_prefix}-webapp-${random_string.suffix.result}"
 
@@ -288,7 +281,6 @@ resource "aws_iam_instance_profile" "webapp" {
   role = aws_iam_role.webapp.name
 }
 
-# EC2 Instance
 resource "aws_instance" "webapp" {
   ami                    = module.ami.amazon_linux_2023_id
   instance_type          = local.instance_type
@@ -306,10 +298,10 @@ resource "aws_instance" "webapp" {
 
   user_data = base64encode(templatefile("${path.module}/userdata.tpl", {
     bucket_name = aws_s3_bucket.app_files.id
-    db_host     = aws_db_instance.intel_db.address
-    db_port     = aws_db_instance.intel_db.port
-    db_name     = aws_db_instance.intel_db.db_name
-    db_user     = aws_db_instance.intel_db.username
+    db_host     = aws_db_instance.trading_db.address
+    db_port     = aws_db_instance.trading_db.port
+    db_name     = aws_db_instance.trading_db.db_name
+    db_user     = aws_db_instance.trading_db.username
     db_password = random_password.db_password.result
   }))
 
@@ -317,7 +309,7 @@ resource "aws_instance" "webapp" {
     Name = "${var.lab_prefix}-webapp"
   })
 
-  depends_on = [aws_db_instance.intel_db, aws_s3_object.app_py, aws_s3_object.seed_sql]
+  depends_on = [aws_db_instance.trading_db, aws_s3_object.app_py, aws_s3_object.seed_sql]
 
   lifecycle {
     ignore_changes = [ami, user_data]

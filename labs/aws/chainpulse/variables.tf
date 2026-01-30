@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "lab_prefix" {
   description = "Prefix for resource naming"
   type        = string
-  default     = "sentinel"
+  default     = "chainpulse"
   validation {
     condition     = can(regex("^[a-z0-9-]+$", var.lab_prefix))
     error_message = "Prefix must contain only lowercase letters, numbers, and hyphens"

